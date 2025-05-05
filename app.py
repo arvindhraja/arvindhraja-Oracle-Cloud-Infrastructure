@@ -1,89 +1,47 @@
-import os
-import praw
+import streamlit as st
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from torch.nn.functional import softmax
 import torch
+import torch.nn.functional as F
 import pandas as pd
 import matplotlib.pyplot as plt
-import streamlit as st
 
-# Set environment variable to suppress warning for symlinks
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+# Load model and tokenizer once (cached)
+@st.cache_resource
+def load_model():
+    model_name = "j-hartmann/emotion-english-distilroberta-base"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name)
+    return tokenizer, model
 
-# Load the emotion model
-model_name = "cardiffnlp/twitter-roberta-base-emotion"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForSequenceClassification.from_pretrained(model_name)
+tokenizer, model = load_model()
 
-# Map of emotions based on model config
-labels = ['anger', 'joy', 'optimism', 'sadness', 'fear', 'surprise', 'disgust', 'trust']
+# App title
+st.title("🔍 Emotion Detector from Text")
+st.write("Enter a sentence below to analyze its emotion.")
 
-# Streamlit UI elements
-st.title("Emotion Detection from Reddit Posts")
-st.write("""
-    This app fetches posts from Reddit and performs emotion detection using a pre-trained RoBERTa model.
-    It classifies emotions into categories like anger, joy, sadness, etc., and displays the results.
-""")
+# Text input
+user_input = st.text_input("Your sentence here:", "")
 
-# Fetch subreddit input from user
-subreddit_name = st.text_input("Enter subreddit name (e.g., 'depression', 'freefire'):", "depression")
-
-# Connect to Reddit
-reddit = praw.Reddit(
-    client_id="mDLkHdRT5fIXR2Im6igHlQ",
-    client_secret="Bbl7PFz-iXO6nfNP7sAx-U2EXtXVng",
-    user_agent="MySentimentApp by u/jrterex",
-    username="jrterex",
-    password="moon@007"
-)
-
-# Fetch posts from the subreddit
-posts = reddit.subreddit(subreddit_name).hot(limit=100)
-
-# 🔄 Store results for CSV
-data = []
-
-st.write("🔍 Analyzing emotions from posts...")
-
-for post in posts:
-    text = post.title
-
-    # Tokenize and predict
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=128)
+if user_input:
+    # Tokenize and run through model
+    inputs = tokenizer(user_input, return_tensors="pt")
     with torch.no_grad():
         logits = model(**inputs).logits
-    probs = softmax(logits, dim=1)
-    predicted_class = torch.argmax(probs, dim=1).item()
-    emotion = labels[predicted_class]
+        probs = F.softmax(logits, dim=1).squeeze()
 
-    # Display the result in the Streamlit app
-    st.write(f"📝 **Text**: {text}")
-    st.write(f"❤️ **Emotion**: {emotion}\n")
+    # Get emotion labels
+    labels = model.config.id2label
+    emotion_scores = {labels[i]: float(probs[i]) for i in range(len(probs))}
 
-    # Add to data list
-    data.append({"Text": text, "Emotion": emotion})
+    # Sort and display
+    sorted_emotions = dict(sorted(emotion_scores.items(), key=lambda item: item[1], reverse=True))
+    top_emotion = max(sorted_emotions, key=sorted_emotions.get)
 
-# Save results to CSV
-df = pd.DataFrame(data)
-csv_file = "reddit_emotions.csv"
-df.to_csv(csv_file, index=False)
+    st.markdown(f"### 🧠 Predicted Emotion: **{top_emotion}**")
 
-# Provide download button for the CSV file
-st.download_button(
-    label="Download results as CSV",
-    data=df.to_csv(index=False),
-    file_name=csv_file,
-    mime="text/csv"
-)
+    # Show bar chart
+    st.bar_chart(pd.Series(sorted_emotions))
 
-# 📊 Create and show pie chart
-emotion_counts = df['Emotion'].value_counts()
-
-plt.figure(figsize=(6, 6))
-plt.pie(emotion_counts, labels=emotion_counts.index, autopct='%1.1f%%', colors=plt.cm.Paired.colors)
-plt.title(f"Emotion Distribution from r/{subreddit_name} Posts")
-plt.axis("equal")
-plt.tight_layout()
-
-# Show the pie chart in Streamlit
-st.pyplot(plt)
+    # Optional: raw scores
+    with st.expander("See full emotion scores"):
+        st.write(sorted_emotions)
