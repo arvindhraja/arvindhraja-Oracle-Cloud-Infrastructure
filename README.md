@@ -1,6 +1,6 @@
 **Emotion Detection from Reddit Posts using RoBERTa and Hugging Face**:
-https://arvindhraja-oracle-cloud-infrastructure-fapexfvbgc3mwzzvrmf7h8.streamlit.app/
 
+https://arvindhraja-oracle-cloud-infrastructure-idzabfzxbdykivmvckf9fz.streamlit.app/
 markdown
 # Emotion Detection from Reddit Posts
 
