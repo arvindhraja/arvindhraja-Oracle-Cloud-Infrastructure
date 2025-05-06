@@ -7,28 +7,54 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 
-# Set environment variable to suppress warning for symlinks
+# Suppress symlink warning
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 # Load the emotion model
 model_name = "cardiffnlp/twitter-roberta-base-emotion"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name)
-
-# Map of emotions based on model config
 labels = ['anger', 'joy', 'optimism', 'sadness', 'fear', 'surprise', 'disgust', 'trust']
 
-# Streamlit UI elements
-st.title("Emotion Detection from Reddit Posts")
-st.write("""
-    This app fetches posts from Reddit and performs emotion detection using a pre-trained RoBERTa model.
-    It classifies emotions into categories like anger, joy, sadness, etc., and displays the results.
-""")
+# 🎨 Theme-aware dynamic colors
+theme = st.get_option("theme.base") or "light"
+bg_color = "#f5f5f5" if theme == "light" else "#2b2b2b"
+text_color = "#000000" if theme == "light" else "#ffffff"
 
-# Fetch subreddit input from user
-subreddit_name = st.text_input("Enter subreddit name (e.g., 'depression', 'freefire'):", "depression")
+# 🧠 Custom CSS with theme support
+st.markdown(f"""
+    <style>
+        .title {{
+            font-size: 32px;
+            font-weight: bold;
+            color: #4CAF50;
+        }}
+        .subtitle {{
+            font-size: 18px;
+            color: #999;
+        }}
+        .post-box {{
+            background-color: {bg_color};
+            color: {text_color};
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }}
+    </style>
+""", unsafe_allow_html=True)
 
-# Connect to Reddit
+# 🧭 Sidebar settings
+st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/5/58/Reddit_logo_new.svg", width=100)
+st.sidebar.title("🔧 Settings")
+subreddit_name = st.sidebar.text_input("Subreddit name", "depression")
+limit = st.sidebar.slider("Number of posts", 10, 100, 50)
+
+# 🧠 Title
+st.markdown('<div class="title">Reddit Emotion Detector</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Analyze emotions from Reddit posts using RoBERTa</div>', unsafe_allow_html=True)
+st.write("---")
+
+# 🤖 Connect to Reddit
 reddit = praw.Reddit(
     client_id="mDLkHdRT5fIXR2Im6igHlQ",
     client_secret="Bbl7PFz-iXO6nfNP7sAx-U2EXtXVng",
@@ -37,53 +63,47 @@ reddit = praw.Reddit(
     password="moon@007"
 )
 
-# Fetch posts from the subreddit
-posts = reddit.subreddit(subreddit_name).hot(limit=100)
+# 🔍 Analyze Reddit posts
+with st.spinner("🔎 Analyzing posts..."):
+    posts = reddit.subreddit(subreddit_name).hot(limit=limit)
+    data = []
 
-# 🔄 Store results for CSV
-data = []
+    for post in posts:
+        text = post.title
+        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=128)
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        probs = softmax(logits, dim=1)
+        predicted_class = torch.argmax(probs, dim=1).item()
+        emotion = labels[predicted_class]
 
-st.write("🔍 Analyzing emotions from posts...")
+        # 💬 Render post
+        st.markdown(f"""
+            <div class="post-box">
+                <strong>📝 Text:</strong> {text}<br>
+                <strong>❤️ Emotion:</strong> {emotion}
+            </div>
+        """, unsafe_allow_html=True)
 
-for post in posts:
-    text = post.title
+        data.append({"Text": text, "Emotion": emotion})
 
-    # Tokenize and predict
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=128)
-    with torch.no_grad():
-        logits = model(**inputs).logits
-    probs = softmax(logits, dim=1)
-    predicted_class = torch.argmax(probs, dim=1).item()
-    emotion = labels[predicted_class]
-
-    # Display the result in the Streamlit app
-    st.write(f"📝 **Text**: {text}")
-    st.write(f"❤️ **Emotion**: {emotion}\n")
-
-    # Add to data list
-    data.append({"Text": text, "Emotion": emotion})
-
-# Save results to CSV
+# 📄 Save to CSV
 df = pd.DataFrame(data)
 csv_file = "reddit_emotions.csv"
-df.to_csv(csv_file, index=False)
 
-# Provide download button for the CSV file
-st.download_button(
-    label="Download results as CSV",
-    data=df.to_csv(index=False),
-    file_name=csv_file,
-    mime="text/csv"
-)
+with st.expander("📁 Download Results"):
+    st.download_button(
+        label="📄 Download CSV",
+        data=df.to_csv(index=False),
+        file_name=csv_file,
+        mime="text/csv"
+    )
 
-# 📊 Create and show pie chart
+# 📊 Plot pie chart of emotions
 emotion_counts = df['Emotion'].value_counts()
 
-plt.figure(figsize=(6, 6))
-plt.pie(emotion_counts, labels=emotion_counts.index, autopct='%1.1f%%', colors=plt.cm.Paired.colors)
-plt.title(f"Emotion Distribution from r/{subreddit_name} Posts")
-plt.axis("equal")
-plt.tight_layout()
-
-# Show the pie chart in Streamlit
-st.pyplot(plt)
+st.subheader("📊 Emotion Distribution")
+fig, ax = plt.subplots(figsize=(6, 6))
+ax.pie(emotion_counts, labels=emotion_counts.index, autopct='%1.1f%%', startangle=140, colors=plt.cm.Paired.colors)
+ax.set_title(f"Emotions in r/{subreddit_name}")
+st.pyplot(fig)
