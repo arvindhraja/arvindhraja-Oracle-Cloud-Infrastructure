@@ -7,48 +7,54 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 
-# 🌐 Suppress symlink warning from HuggingFace
+# Suppress symlink warning
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
-# 🔄 Load emotion model
+# Load the emotion model
 model_name = "cardiffnlp/twitter-roberta-base-emotion"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name)
 labels = ['anger', 'joy', 'optimism', 'sadness', 'fear', 'surprise', 'disgust', 'trust']
 
-# 🎨 Custom CSS Styling
-st.markdown("""
+# 🎨 Theme-aware dynamic colors
+theme = st.get_option("theme.base") or "light"
+bg_color = "#f5f5f5" if theme == "light" else "#2b2b2b"
+text_color = "#000000" if theme == "light" else "#ffffff"
+
+# 🧠 Custom CSS with theme support
+st.markdown(f"""
     <style>
-        .title {
+        .title {{
             font-size: 32px;
             font-weight: bold;
             color: #4CAF50;
-        }
-        .subtitle {
+        }}
+        .subtitle {{
             font-size: 18px;
-            color: #555;
-        }
-        .post-box {
-            background-color: #f5f5f5;
+            color: #999;
+        }}
+        .post-box {{
+            background-color: {bg_color};
+            color: {text_color};
             padding: 10px;
             border-radius: 10px;
             margin-bottom: 10px;
-        }
+        }}
     </style>
 """, unsafe_allow_html=True)
 
-# 🔧 Sidebar Inputs
-st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/5/58/Reddit_logo_new.svg", width=120)
+# 🧭 Sidebar settings
+st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/5/58/Reddit_logo_new.svg", width=100)
 st.sidebar.title("🔧 Settings")
 subreddit_name = st.sidebar.text_input("Subreddit name", "depression")
 limit = st.sidebar.slider("Number of posts", 10, 100, 50)
 
-# 🧠 App Title
+# 🧠 Title
 st.markdown('<div class="title">Reddit Emotion Detector</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Analyze emotions from Reddit posts using RoBERTa</div>', unsafe_allow_html=True)
 st.write("---")
 
-# 🛠 Connect to Reddit API
+# 🤖 Connect to Reddit
 reddit = praw.Reddit(
     client_id="mDLkHdRT5fIXR2Im6igHlQ",
     client_secret="Bbl7PFz-iXO6nfNP7sAx-U2EXtXVng",
@@ -57,7 +63,7 @@ reddit = praw.Reddit(
     password="moon@007"
 )
 
-# 🔍 Fetch and analyze posts
+# 🔍 Analyze Reddit posts
 with st.spinner("🔎 Analyzing posts..."):
     posts = reddit.subreddit(subreddit_name).hot(limit=limit)
     data = []
@@ -71,6 +77,7 @@ with st.spinner("🔎 Analyzing posts..."):
         predicted_class = torch.argmax(probs, dim=1).item()
         emotion = labels[predicted_class]
 
+        # 💬 Render post
         st.markdown(f"""
             <div class="post-box">
                 <strong>📝 Text:</strong> {text}<br>
@@ -80,7 +87,7 @@ with st.spinner("🔎 Analyzing posts..."):
 
         data.append({"Text": text, "Emotion": emotion})
 
-# 💾 Save to CSV
+# 📄 Save to CSV
 df = pd.DataFrame(data)
 csv_file = "reddit_emotions.csv"
 
@@ -92,7 +99,7 @@ with st.expander("📁 Download Results"):
         mime="text/csv"
     )
 
-# 📊 Emotion Chart
+# 📊 Plot pie chart of emotions
 emotion_counts = df['Emotion'].value_counts()
 
 st.subheader("📊 Emotion Distribution")
