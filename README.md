@@ -1,8 +1,6 @@
-**Emotion Detection from Reddit Posts using RoBERTa and Hugging Face**:
-
-https://arvindhraja-oracle-cloud-infrastructure-idzabfzxbdykivmvckf9fz.streamlit.app/
-markdown
 # Emotion Detection from Reddit Posts
+https://arvindhraja-oracle-cloud-infrastructure-idzabfzxbdykivmvckf9fz.streamlit.app/
+
 
 This project performs **emotion detection** on Reddit posts using the **RoBERTa** model from Hugging Face. It analyzes posts from the subreddit **r/depression**, extracts the emotional tone of the content, and visualizes the distribution of emotions using a pie chart.
 
